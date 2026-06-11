@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/monitor/armmonitor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/sql/armsql"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -27,8 +28,9 @@ type refreshMsg struct{}
 
 // dbsView lists one logical server's databases with their SKUs.
 type dbsView struct {
-	res    azure.Resource // the server
-	client *armsql.DatabasesClient
+	res     azure.Resource // the server
+	client  *armsql.DatabasesClient
+	metrics *armmonitor.MetricsClient
 
 	table   ui.Table
 	spin    spinner.Model
@@ -39,7 +41,7 @@ type dbsView struct {
 	width, height int
 }
 
-func newDBsView(res azure.Resource, client *armsql.DatabasesClient) *dbsView {
+func newDBsView(res azure.Resource, client *armsql.DatabasesClient, metrics *armmonitor.MetricsClient) *dbsView {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 	sp.Style = ui.TitleStyle
 	t := ui.NewTable(
@@ -51,7 +53,7 @@ func newDBsView(res azure.Resource, client *armsql.DatabasesClient) *dbsView {
 		ui.Column{Title: "STATUS", Width: 10},
 	)
 	t.Empty = "no databases on this server"
-	return &dbsView{res: res, client: client, table: t, spin: sp, loading: true}
+	return &dbsView{res: res, client: client, metrics: metrics, table: t, spin: sp, loading: true}
 }
 
 func (v *dbsView) Init() tea.Cmd {
@@ -139,7 +141,7 @@ func (v *dbsView) openScale() tea.Cmd {
 	if sku != nil && strings.EqualFold(strFrom(sku.Tier), "DataWarehouse") {
 		return ui.Warnf("data warehouse SKUs aren't supported here")
 	}
-	return ui.Push(newScaleView(v.client, v.res, db))
+	return ui.Push(newScaleView(v.client, v.metrics, v.res, db))
 }
 
 func (v *dbsView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -179,9 +181,8 @@ func (v *dbsView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !v.table.InputActive() {
 			switch msg.String() {
 			case "enter", "s":
-				if cmd := ui.BlockIfReadOnly(); cmd != nil {
-					return v, cmd
-				}
+				// Read-only mode still gets the view — the graph is a read;
+				// applying a scale is guarded inside.
 				return v, v.openScale()
 			case "R":
 				v.loading = true
@@ -208,7 +209,7 @@ func (v *dbsView) Breadcrumb() string { return v.res.Name }
 
 func (v *dbsView) KeyHints() []ui.KeyHint {
 	return []ui.KeyHint{
-		{Keys: "enter/s", Desc: "scale database"},
+		{Keys: "enter/s", Desc: "scale + CPU graph"},
 		{Keys: "R", Desc: "refresh"},
 	}
 }

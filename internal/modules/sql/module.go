@@ -6,6 +6,7 @@ package sql
 import (
 	"fmt"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/monitor/armmonitor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/sql/armsql"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -31,5 +32,9 @@ func (module) Open(mctx modules.Context, res azure.Resource) (tea.Model, error) 
 	if err != nil {
 		return nil, fmt.Errorf("creating sql client for %s: %w", res.Name, err)
 	}
-	return newDBsView(res, client), nil
+	metrics, err := armmonitor.NewMetricsClient(res.SubscriptionID, mctx.Cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating metrics client for %s: %w", res.Name, err)
+	}
+	return newDBsView(res, client, metrics), nil
 }

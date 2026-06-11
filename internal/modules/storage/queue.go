@@ -222,6 +222,9 @@ func (v *queueMsgDetail) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, nil
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "y":
+			text, _ := decodeText(deref(v.msg.MessageText))
+			return v, ui.Yank("message "+deref(v.msg.MessageID), text)
 		case "g":
 			v.vp.GotoTop()
 			return v, nil
@@ -240,5 +243,8 @@ func (v *queueMsgDetail) View() string { return v.vp.View() }
 func (v *queueMsgDetail) Breadcrumb() string { return deref(v.msg.MessageID) }
 
 func (v *queueMsgDetail) KeyHints() []ui.KeyHint {
-	return []ui.KeyHint{{Keys: "j/k", Desc: "scroll"}}
+	return []ui.KeyHint{
+		{Keys: "y", Desc: "yank message text"},
+		{Keys: "j/k", Desc: "scroll"},
+	}
 }

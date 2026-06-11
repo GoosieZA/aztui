@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/monitor/armmonitor"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/sql/armsql"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -98,12 +100,18 @@ var models = []struct {
 	},
 }
 
-// scaleView is the vi-key slider: h/l moves along the size ladder, t cycles
-// the tier, m switches between the DTU and vCore purchasing models.
+// sliderHeight is the fixed line budget of the slider block; everything
+// below it belongs to the CPU chart.
+const sliderHeight = 13
+
+// scaleView is the vi-key slider — h/l moves along the size ladder, t cycles
+// the tier, m switches purchasing models — with a live CPU line chart below,
+// so the evidence for the resize sits right under the control.
 type scaleView struct {
 	client *armsql.DatabasesClient
 	server azure.Resource
 	db     *armsql.Database
+	chart  *cpuChart
 
 	modelIdx, tierIdx, optIdx int
 	confirm                   ui.Confirm
@@ -111,8 +119,8 @@ type scaleView struct {
 	width, height int
 }
 
-func newScaleView(client *armsql.DatabasesClient, server azure.Resource, db *armsql.Database) *scaleView {
-	v := &scaleView{client: client, server: server, db: db}
+func newScaleView(client *armsql.DatabasesClient, metrics *armmonitor.MetricsClient, server azure.Resource, db *armsql.Database) *scaleView {
+	v := &scaleView{client: client, server: server, db: db, chart: newCPUChart(metrics, strFrom(db.ID))}
 	v.selectCurrent()
 	return v
 }
@@ -229,13 +237,18 @@ func scaleCmd(client *armsql.DatabasesClient, rg, server, db string, opt scaleOp
 	}
 }
 
-func (v *scaleView) Init() tea.Cmd { return nil }
+func (v *scaleView) Init() tea.Cmd { return v.chart.load() }
 
 func (v *scaleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		v.width, v.height = msg.Width, msg.Height
+		v.chart.setSize(msg.Width-2, msg.Height-sliderHeight)
 		return v, nil
+
+	case metricsMsg, spinner.TickMsg:
+		_, cmd := v.chart.update(msg)
+		return v, cmd
 
 	case tea.KeyMsg:
 		if handled, result := v.confirm.Update(msg); handled {
@@ -249,6 +262,9 @@ func (v *scaleView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 			}
 			return v, nil
+		}
+		if handled, cmd := v.chart.update(msg); handled {
+			return v, cmd
 		}
 		switch msg.String() {
 		case "l", "right":
@@ -354,7 +370,11 @@ func (v *scaleView) View() string {
 	line("")
 	line(ui.DimStyle.Render(" h/l size · t tier · m model · enter apply · esc cancel"))
 
-	return lipgloss.NewStyle().MarginLeft(max(0, (v.width-70)/2)).Render(b.String())
+	slider := lipgloss.NewStyle().MarginLeft(max(0, (v.width-70)/2)).Render(b.String())
+	if chart := v.chart.view(); chart != "" {
+		return slider + "\n" + chart
+	}
+	return slider
 }
 
 func (v *scaleView) InputActive() bool { return v.confirm.Active }
@@ -367,6 +387,8 @@ func (v *scaleView) KeyHints() []ui.KeyHint {
 		{Keys: "g/G", Desc: "smallest / largest"},
 		{Keys: "t/T", Desc: "next / previous tier"},
 		{Keys: "m", Desc: "DTU ↔ vCore model"},
+		{Keys: "1/2/3", Desc: "graph range 1h/24h/7d"},
+		{Keys: "R", Desc: "refresh graph"},
 		{Keys: "enter", Desc: "apply (with confirm)"},
 	}
 }

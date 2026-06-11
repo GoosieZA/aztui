@@ -14,11 +14,12 @@ terminal and without waiting for the portal to load.
 
 ## What it does today
 
-- **Launcher home screen** — one tile per module (icon + live resource
-  count, discovered tenant-wide via Azure Resource Graph) with your recently
-  opened resources underneath. Tiles and recents are keyboard-driven and
-  mouse-clickable; each tile opens a filterable list of that module's
-  resources.
+- **Launcher home screen** — module tiles in a five-column grid (icon +
+  live resource count, discovered tenant-wide via Azure Resource Graph),
+  sorted by how many resources you actually have; modules with zero
+  resources hide automatically (still reachable via `:`). Recently opened
+  resources and a session-changes feed sit underneath. Tiles and recents
+  are keyboard-driven and mouse-clickable.
 - **Persistent header** — the logo and a full-width keys panel stay fixed at
   the top of every screen, k9s-style; the keys shown follow whatever view
   you're in. While background work runs (scaling a database, purging a
@@ -47,7 +48,10 @@ terminal and without waiting for the portal to load.
   capacity, size, status) and scale a database with a vi-key slider that
   covers both purchasing models: DTU (Basic/Standard/Premium service
   objectives) and vCore (General Purpose, Serverless, Business Critical,
-  Hyperscale). Scaling runs in the background and flashes when it lands.
+  Hyperscale). A **CPU line chart** (average + max from Azure Monitor,
+  1h/24h/7d) sits directly under the slider, so the evidence for a resize
+  is on the same screen as the control. Scaling runs in the background and
+  flashes when it lands.
 - **Virtual Machines** — a per-VM dashboard with live power state, size,
   OS, and resolved private/public IPs. Start, restart, stop (deallocate) or
   power off in the background; manage **VM extensions** (install via an
@@ -110,9 +114,14 @@ Vi everywhere. `?` shows the keys for whatever view you're in.
 | `/` | filter the current table |
 | `:` | command line — `:home`, `:appconfig` (`:ac`), `:servicebus` (`:sb`), `:q` |
 | `enter` | select / drill in |
+| `y` | yank — copy the value under the cursor to the clipboard |
 | `esc` | back |
 | `?` | help |
 | `ctrl+c` | quit |
+
+`y` works wherever there's a value: App Configuration settings (lists,
+details, cross-store view), Key Vault secrets, Service Bus message bodies,
+storage queue messages, and resource IDs in resource lists.
 
 On the home screen: `h`/`l` choose a module tile, `j`/`k` move into the
 recents list, `1`-`9` open a recent directly, and tiles/recents respond to
@@ -128,7 +137,7 @@ mouse clicks.
 | `ctrl+a` | select all visible |
 | `E` | bulk edit selection as JSON (portal-style advanced edit) |
 | `D` | diff & sync against another store |
-| `x` | this key across every store — one row per environment |
+| `x` | this key across every store — one row per environment; `e` edits the value in any store right there (creating it where missing) |
 | `n` | new setting (`$EDITOR`, YAML template) |
 | `d` | delete setting |
 | `L` | lock / unlock (read-only) |
@@ -180,7 +189,7 @@ sequence, so consumers are unaffected.
 
 | Key | Action |
 | --- | --- |
-| `enter` / `s` | open the scale slider for a database |
+| `enter` / `s` | scale view: slider + CPU line graph (`1`/`2`/`3` = 1h/24h/7d range) |
 | `h` / `l` | smaller / larger size on the slider |
 | `g` / `G` | smallest / largest |
 | `t` / `T` | cycle tier (Basic/Standard/Premium or GP/Serverless/BC/Hyperscale) |

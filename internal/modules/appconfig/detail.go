@@ -115,6 +115,8 @@ func (v *detailView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "y":
+			return v, ui.Yank(deref(v.setting.Key), deref(v.setting.Value))
 		case "e":
 			if cmd := ui.BlockIfReadOnly(); cmd != nil {
 				return v, cmd
@@ -150,6 +152,7 @@ func (v *detailView) Breadcrumb() string { return deref(v.setting.Key) }
 func (v *detailView) KeyHints() []ui.KeyHint {
 	return []ui.KeyHint{
 		{Keys: "e", Desc: "edit value in $EDITOR"},
+		{Keys: "y", Desc: "yank value"},
 		{Keys: "j/k", Desc: "scroll"},
 	}
 }

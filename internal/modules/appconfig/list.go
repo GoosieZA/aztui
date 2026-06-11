@@ -343,6 +343,10 @@ func (v *listView) handleAction(key string) (tea.Cmd, bool) {
 		if s, _, ok := v.selected(); ok {
 			return ui.Push(newCrossView(v.mctx, deref(s.Key), deref(s.Label))), true
 		}
+	case "y":
+		if s, _, ok := v.selected(); ok {
+			return ui.Yank(deref(s.Key), deref(s.Value)), true
+		}
 	case "R":
 		v.loading = true
 		return tea.Batch(v.spin.Tick, v.load()), true
@@ -527,6 +531,7 @@ func (v *listView) KeyHints() []ui.KeyHint {
 		{Keys: "E", Desc: "bulk edit selection as JSON"},
 		{Keys: "D", Desc: "diff & sync with another store"},
 		{Keys: "x", Desc: "this key across all stores"},
+		{Keys: "y", Desc: "yank value"},
 		{Keys: "n", Desc: "new setting"},
 		{Keys: "d", Desc: "delete setting"},
 		{Keys: "L", Desc: "lock/unlock (read-only)"},

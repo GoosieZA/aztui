@@ -135,6 +135,12 @@ func (v *detailView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.revealed = !v.revealed
 			v.vp.SetContent(v.content())
 			return v, nil
+		case "y":
+			value := ""
+			if v.secret.Value != nil {
+				value = *v.secret.Value
+			}
+			return v, ui.Yank(v.name(), value)
 		case "e":
 			if cmd := ui.BlockIfReadOnly(); cmd != nil {
 				return v, cmd
@@ -170,6 +176,7 @@ func (v *detailView) Breadcrumb() string { return v.name() }
 func (v *detailView) KeyHints() []ui.KeyHint {
 	return []ui.KeyHint{
 		{Keys: "v", Desc: "reveal / mask value"},
+		{Keys: "y", Desc: "yank secret value"},
 		{Keys: "e", Desc: "new version in $EDITOR"},
 		{Keys: "j/k", Desc: "scroll"},
 	}

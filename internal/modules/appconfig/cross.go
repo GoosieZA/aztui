@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -30,8 +31,14 @@ type crossLoadedMsg struct {
 	err  error
 }
 
+type crossSavedMsg struct {
+	store string
+	err   error
+}
+
 // crossView answers "what is this key in every environment?" — it fetches
 // one key+label from every discovered App Configuration store at once.
+// Values can be edited (or created) in any store directly from here.
 type crossView struct {
 	mctx       modules.Context
 	key, label string
@@ -40,7 +47,8 @@ type crossView struct {
 	spin    spinner.Model
 	loading bool
 
-	rows []crossRow
+	rows        []crossRow
+	pendingEdit int // row index with an in-flight $EDITOR session
 
 	width, height int
 }
@@ -54,7 +62,34 @@ func newCrossView(mctx modules.Context, key, label string) *crossView {
 		ui.Column{Title: "UPDATED", Width: 8},
 	)
 	t.Empty = "no App Configuration stores found"
-	return &crossView{mctx: mctx, key: key, label: label, table: t, spin: sp, loading: true}
+	return &crossView{mctx: mctx, key: key, label: label, table: t, spin: sp, loading: true, pendingEdit: -1}
+}
+
+// saveCrossCmd writes a value into one specific store, creating the setting
+// there if it doesn't exist yet.
+func saveCrossCmd(mctx modules.Context, row crossRow, key, label, value string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+		defer cancel()
+		endpoint, _, err := row.store.Endpoint()
+		if err != nil {
+			return crossSavedMsg{store: row.store.Name, err: err}
+		}
+		client, err := azappconfig.NewClient(endpoint, mctx.Cred, nil)
+		if err != nil {
+			return crossSavedMsg{store: row.store.Name, err: err}
+		}
+		opts := &azappconfig.SetSettingOptions{}
+		if label != "" {
+			opts.Label = &label
+		}
+		if row.setting != nil {
+			opts.ContentType = row.setting.ContentType
+			opts.OnlyIfUnchanged = row.setting.ETag
+		}
+		_, err = client.SetSetting(ctx, key, &value, opts)
+		return crossSavedMsg{store: row.store.Name, err: err}
+	}
 }
 
 func (v *crossView) Init() tea.Cmd {
@@ -173,6 +208,29 @@ func (v *crossView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.spin, cmd = v.spin.Update(msg)
 		return v, cmd
 
+	case crossSavedMsg:
+		if msg.err != nil {
+			return v, ui.Errorf("saving to %s failed: %v", msg.store, msg.err)
+		}
+		ui.RecordChange(msg.store, "set "+v.key)
+		v.loading = true
+		return v, tea.Batch(ui.Status("set %s in %s", v.key, msg.store), v.Init())
+
+	case ui.EditorResult:
+		if msg.Err != nil {
+			return v, ui.Errorf("editor: %v", msg.Err)
+		}
+		if msg.Canceled {
+			return v, ui.Status("no changes")
+		}
+		if msg.Tag == "cross-edit" && v.pendingEdit >= 0 && v.pendingEdit < len(v.rows) {
+			row := v.rows[v.pendingEdit]
+			v.pendingEdit = -1
+			value := strings.TrimSuffix(string(msg.Content), "\n")
+			return v, saveCrossCmd(v.mctx, row, v.key, v.label, value)
+		}
+		return v, nil
+
 	case tea.KeyMsg:
 		if !v.table.InputActive() {
 			switch msg.String() {
@@ -182,6 +240,31 @@ func (v *crossView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return v, ui.Push(newValueView(v.rows[idx].store.Name, v.key, v.rows[idx].setting))
 				}
 				return v, nil
+			case "e":
+				if cmd := ui.BlockIfReadOnly(); cmd != nil {
+					return v, cmd
+				}
+				idx := v.table.CursorRow()
+				if idx < 0 || idx >= len(v.rows) {
+					return v, nil
+				}
+				row := v.rows[idx]
+				if row.err != "" {
+					return v, ui.Warnf("cannot edit: %s", row.err)
+				}
+				v.pendingEdit = idx
+				value, ext := "", "txt"
+				if row.setting != nil {
+					value = deref(row.setting.Value)
+					ext = extFor(*row.setting)
+				}
+				return v, ui.OpenEditor("cross-edit", []byte(value), ext)
+			case "y":
+				idx := v.table.CursorRow()
+				if idx >= 0 && idx < len(v.rows) && v.rows[idx].setting != nil {
+					return v, ui.Yank(v.key+" @ "+v.rows[idx].store.Name, deref(v.rows[idx].setting.Value))
+				}
+				return v, ui.Warnf("no value to yank")
 			case "R":
 				v.loading = true
 				return v, v.Init()
@@ -223,6 +306,8 @@ func (v *crossView) Breadcrumb() string { return "across stores" }
 func (v *crossView) KeyHints() []ui.KeyHint {
 	return []ui.KeyHint{
 		{Keys: "enter", Desc: "view full value"},
+		{Keys: "e", Desc: "edit value in this store (creates if missing)"},
+		{Keys: "y", Desc: "yank value"},
 		{Keys: "R", Desc: "re-fetch from all stores"},
 	}
 }
@@ -255,6 +340,8 @@ func (v *valueView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, nil
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "y":
+			return v, ui.Yank(v.key+" @ "+v.store, deref(v.setting.Value))
 		case "g":
 			v.vp.GotoTop()
 			return v, nil
@@ -275,5 +362,5 @@ func (v *valueView) View() string {
 func (v *valueView) Breadcrumb() string { return v.store }
 
 func (v *valueView) KeyHints() []ui.KeyHint {
-	return []ui.KeyHint{{Keys: "j/k", Desc: "scroll"}}
+	return []ui.KeyHint{{Keys: "y", Desc: "yank value"}, {Keys: "j/k", Desc: "scroll"}}
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 
 const (
 	tileHeight  = 5 // 3 content lines + borders
+	tilesPerRow = 5
 	homeRecents = 6
 )
 
@@ -107,6 +109,37 @@ func (h *Home) resolveRecents() {
 	}
 }
 
+// visibleModules is what the tile grid shows: while discovery runs every
+// module appears, afterwards empty ones are hidden and the rest sort by
+// resource count (most-used first). If everything is empty, show everything
+// — a blank launcher helps nobody. Hidden modules stay reachable via ":".
+func (h *Home) visibleModules() []modules.Module {
+	all := modules.All()
+	if h.loading || h.err != nil {
+		return all
+	}
+	vis := make([]modules.Module, 0, len(all))
+	counts := make(map[string]int, len(all))
+	for _, m := range all {
+		n := h.countFor(m)
+		counts[m.ID()] = n
+		if n > 0 {
+			vis = append(vis, m)
+		}
+	}
+	if len(vis) == 0 {
+		return all
+	}
+	sort.SliceStable(vis, func(i, j int) bool {
+		ci, cj := counts[vis[i].ID()], counts[vis[j].ID()]
+		if ci != cj {
+			return ci > cj
+		}
+		return vis[i].ID() < vis[j].ID()
+	})
+	return vis
+}
+
 func (h *Home) countFor(mod modules.Module) int {
 	types := make(map[string]bool)
 	for _, t := range mod.ResourceTypes() {
@@ -141,7 +174,7 @@ func (h *Home) seedFor(mod modules.Module) []azure.Resource {
 }
 
 func (h *Home) openTile() tea.Cmd {
-	mods := modules.All()
+	mods := h.visibleModules()
 	if h.tileIdx < 0 || h.tileIdx >= len(mods) {
 		return nil
 	}
@@ -207,6 +240,9 @@ func (h *Home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		h.err = nil
 		h.resources = msg.resources
 		h.resolveRecents()
+		if n := len(h.visibleModules()); h.tileIdx >= n {
+			h.tileIdx = max(0, n-1)
+		}
 		return h, ui.Status("%d resources discovered", len(msg.resources))
 
 	case discoverErrMsg:
@@ -244,7 +280,7 @@ func (h *Home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (h *Home) handleKey(key string) tea.Cmd {
-	mods := modules.All()
+	mods := h.visibleModules()
 	perRow := max(1, h.lay.perRow)
 	switch key {
 	case "enter":
@@ -301,7 +337,7 @@ func (h *Home) handleKey(key string) tea.Cmd {
 }
 
 func (h *Home) click(x, y int) tea.Cmd {
-	mods := modules.All()
+	mods := h.visibleModules()
 	l := h.lay
 
 	if y >= l.tilesY && y < l.tilesY+l.tileRows*tileHeight {
@@ -356,8 +392,7 @@ func (h *Home) renderTile(mod modules.Module, selected bool, innerW int) string 
 	return border.Render(content)
 }
 
-func (h *Home) tilesBlock(tileW, perRow int) string {
-	mods := modules.All()
+func (h *Home) tilesBlock(mods []modules.Module, tileW, perRow int) string {
 	innerW := tileW - 4
 	var rows []string
 	for start := 0; start < len(mods); start += perRow {
@@ -430,14 +465,15 @@ func (h *Home) changesBlock(contentW int) string {
 
 func (h *Home) View() string {
 	tileW := h.tileWidth()
-	mods := modules.All()
-	perRow := max(1, (h.width-2)/(tileW+2))
+	mods := h.visibleModules()
+	// Five columns per row, fewer only when the terminal can't fit them.
+	perRow := min(tilesPerRow, max(1, (h.width-2)/(tileW+2)))
 	if perRow > len(mods) {
 		perRow = len(mods)
 	}
 	tileRows := (len(mods) + perRow - 1) / perRow
 
-	tiles := h.tilesBlock(tileW, perRow)
+	tiles := h.tilesBlock(mods, tileW, perRow)
 	contentW := lipgloss.Width(tiles)
 	recents := h.recentsBlock(contentW)
 	changes := h.changesBlock(contentW)

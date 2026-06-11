@@ -190,6 +190,10 @@ func (v *messagesView) handleAction(key string) (tea.Cmd, bool) {
 		}
 	case "m":
 		return v.peekMore(), true
+	case "y":
+		if m, ok := v.selected(); ok {
+			return ui.Yank("message "+m.MessageID, ui.PreviewBody(m.Body)), true
+		}
 	case "t":
 		return ui.Push(newTailView(v.client, v.ent, v.dlq)), true
 	case "s":
@@ -274,6 +278,7 @@ func (v *messagesView) KeyHints() []ui.KeyHint {
 		{Keys: "t", Desc: "live-tail this view"},
 		{Keys: "s", Desc: "send new message"},
 		{Keys: "c", Desc: "clone & edit selected"},
+		{Keys: "y", Desc: "yank message body"},
 		{Keys: "r", Desc: "resubmit from DLQ"},
 		{Keys: "P", Desc: "purge all"},
 		{Keys: "R", Desc: "re-peek from start"},

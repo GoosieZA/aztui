@@ -101,6 +101,8 @@ func (v *messageDetail) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "y":
+			return v, ui.Yank("message "+v.msg.MessageID, ui.PreviewBody(v.msg.Body))
 		case "g":
 			v.vp.GotoTop()
 			return v, nil
@@ -127,5 +129,9 @@ func (v *messageDetail) Breadcrumb() string {
 }
 
 func (v *messageDetail) KeyHints() []ui.KeyHint {
-	return []ui.KeyHint{{Keys: "j/k", Desc: "scroll"}, {Keys: "g/G", Desc: "top/bottom"}}
+	return []ui.KeyHint{
+		{Keys: "y", Desc: "yank message body"},
+		{Keys: "j/k", Desc: "scroll"},
+		{Keys: "g/G", Desc: "top/bottom"},
+	}
 }

@@ -178,6 +178,12 @@ func (v *listView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.purpose {
 		case "view":
 			return v, ui.Push(newDetailView(v.client, msg.secret))
+		case "copy":
+			value := ""
+			if msg.secret.Value != nil {
+				value = *msg.secret.Value
+			}
+			return v, ui.Yank(msg.secret.ID.Name(), value)
 		case "edit":
 			v.editing = msg.secret.ID.Name()
 			value := ""
@@ -245,6 +251,11 @@ func (v *listView) handleAction(key string) (tea.Cmd, bool) {
 		if name, ok := v.selectedName(); ok {
 			v.loading = true
 			return tea.Batch(v.spin.Tick, v.fetch(name, "edit")), true
+		}
+	case "y":
+		if name, ok := v.selectedName(); ok {
+			v.loading = true
+			return tea.Batch(v.spin.Tick, v.fetch(name, "copy")), true
 		}
 	case "n":
 		return ui.OpenEditor("new", []byte(newTemplate), "yaml"), true
@@ -335,6 +346,7 @@ func (v *listView) KeyHints() []ui.KeyHint {
 	return []ui.KeyHint{
 		{Keys: "enter", Desc: "view secret (value masked)"},
 		{Keys: "e", Desc: "new version in $EDITOR"},
+		{Keys: "y", Desc: "yank secret value"},
 		{Keys: "n", Desc: "new secret"},
 		{Keys: "d", Desc: "soft-delete secret"},
 		{Keys: "R", Desc: "refresh"},

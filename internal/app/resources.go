@@ -163,6 +163,10 @@ func (v *resourcesView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "enter":
 				return v, v.open()
+			case "y":
+				if idx := v.table.CursorRow(); idx >= 0 && idx < len(v.display) {
+					return v, ui.Yank(v.display[idx].Name+" resource ID", v.display[idx].ID)
+				}
 			case "R":
 				v.loading = true
 				return v, tea.Batch(v.spin.Tick, v.discover())
@@ -189,6 +193,7 @@ func (v *resourcesView) Breadcrumb() string { return v.mod.Title() }
 func (v *resourcesView) KeyHints() []ui.KeyHint {
 	return []ui.KeyHint{
 		{Keys: "enter", Desc: "open resource"},
+		{Keys: "y", Desc: "yank resource ID"},
 		{Keys: "R", Desc: "re-discover resources"},
 	}
 }
