@@ -130,7 +130,21 @@ func (h *Home) visibleModules() []modules.Module {
 	if len(vis) == 0 {
 		return all
 	}
+	// A manually arranged order (</> on the home screen) wins; anything not
+	// pinned follows, sorted by resource count.
+	rank := make(map[string]int, len(h.mctx.Config.TileOrder))
+	for i, id := range h.mctx.Config.TileOrder {
+		rank[id] = i
+	}
 	sort.SliceStable(vis, func(i, j int) bool {
+		ri, iPinned := rank[vis[i].ID()]
+		rj, jPinned := rank[vis[j].ID()]
+		if iPinned != jPinned {
+			return iPinned
+		}
+		if iPinned && jPinned {
+			return ri < rj
+		}
 		ci, cj := counts[vis[i].ID()], counts[vis[j].ID()]
 		if ci != cj {
 			return ci > cj
@@ -138,6 +152,41 @@ func (h *Home) visibleModules() []modules.Module {
 		return vis[i].ID() < vis[j].ID()
 	})
 	return vis
+}
+
+// moveTile shifts the selected tile left or right and pins the resulting
+// order in the config, so the arrangement survives restarts.
+func (h *Home) moveTile(delta int) tea.Cmd {
+	if h.loading || h.err != nil {
+		return ui.Warnf("wait for discovery before rearranging tiles")
+	}
+	mods := h.visibleModules()
+	target := h.tileIdx + delta
+	if h.tileIdx < 0 || h.tileIdx >= len(mods) || target < 0 || target >= len(mods) {
+		return nil
+	}
+	order := make([]string, len(mods))
+	for i, m := range mods {
+		order[i] = m.ID()
+	}
+	order[h.tileIdx], order[target] = order[target], order[h.tileIdx]
+	// Pin hidden modules too, after the visible ones, so their relative
+	// place is stable if they gain resources later.
+	seen := make(map[string]bool, len(order))
+	for _, id := range order {
+		seen[id] = true
+	}
+	for _, m := range modules.All() {
+		if !seen[m.ID()] {
+			order = append(order, m.ID())
+		}
+	}
+	h.mctx.Config.TileOrder = order
+	h.tileIdx = target
+	if err := h.mctx.Config.Save(); err != nil {
+		return ui.Errorf("saving tile order: %v", err)
+	}
+	return ui.Status("tile order saved")
 }
 
 func (h *Home) countFor(mod modules.Module) int {
@@ -316,6 +365,14 @@ func (h *Home) handleKey(key string) tea.Cmd {
 			}
 		} else if h.tileIdx-perRow >= 0 {
 			h.tileIdx -= perRow
+		}
+	case "<", ">":
+		if h.zone == zoneTiles {
+			delta := 1
+			if key == "<" {
+				delta = -1
+			}
+			return h.moveTile(delta)
 		}
 	case "tab":
 		if h.zone == zoneTiles && len(h.recents) > 0 {
@@ -529,6 +586,7 @@ func (h *Home) Breadcrumb() string { return "" }
 func (h *Home) KeyHints() []ui.KeyHint {
 	return []ui.KeyHint{
 		{Keys: "h/l", Desc: "choose module tile"},
+		{Keys: "</>", Desc: "rearrange tiles (saved)"},
 		{Keys: "j/k", Desc: "move into recents"},
 		{Keys: "enter", Desc: "open selection"},
 		{Keys: "1-9", Desc: "open recent by number"},

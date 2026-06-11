@@ -9,6 +9,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resourcegraph/armresourcegraph"
+
+	"github.com/GoosieZA/aztui/internal/ui"
 )
 
 // DiscoverResources queries Azure Resource Graph across all subscriptions the
@@ -79,8 +81,8 @@ func DiscoverResources(ctx context.Context, cred azcore.TokenCredential, types [
 		skipToken = resp.SkipToken
 	}
 
-	sort.Slice(resources, func(i, j int) bool {
-		return strings.ToLower(resources[i].Name) < strings.ToLower(resources[j].Name)
+	sort.SliceStable(resources, func(i, j int) bool {
+		return ui.NaturalLess(strings.ToLower(resources[i].Name), strings.ToLower(resources[j].Name))
 	})
 	return resources, nil
 }

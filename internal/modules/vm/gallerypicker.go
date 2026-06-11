@@ -151,7 +151,7 @@ func (v *galleryPickerView) Init() tea.Cmd {
 				}
 			}
 		}
-		sort.Slice(apps, func(i, j int) bool { return apps[i].name < apps[j].name })
+		sort.SliceStable(apps, func(i, j int) bool { return ui.NaturalLess(apps[i].name, apps[j].name) })
 		return galleryAppsMsg{apps: apps}
 	})
 }
@@ -185,7 +185,7 @@ func (v *galleryPickerView) loadVersions(app galleryAppRow) tea.Cmd {
 				versions = append(versions, row)
 			}
 		}
-		sort.Slice(versions, func(i, j int) bool { return versions[i].name > versions[j].name })
+		sort.SliceStable(versions, func(i, j int) bool { return ui.NaturalLess(versions[j].name, versions[i].name) })
 		return galleryVersionsMsg{versions: versions}
 	}
 }

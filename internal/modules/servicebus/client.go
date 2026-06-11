@@ -11,6 +11,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus/admin"
+
+	"github.com/GoosieZA/aztui/internal/ui"
 )
 
 // resubmitScanLimit caps how many DLQ messages a resubmit will receive-and-
@@ -141,11 +143,11 @@ func (c *Client) ListEntities(ctx context.Context) ([]Entity, error) {
 		entities = append(entities, *e)
 	}
 
-	sort.Slice(entities, func(i, j int) bool {
+	sort.SliceStable(entities, func(i, j int) bool {
 		if entities[i].Kind != entities[j].Kind {
 			return entities[i].Kind < entities[j].Kind // queues before topics
 		}
-		return entities[i].Name < entities[j].Name
+		return ui.NaturalLess(entities[i].Name, entities[j].Name)
 	})
 	return entities, nil
 }
@@ -186,7 +188,7 @@ func (c *Client) ListSubscriptions(ctx context.Context, topic string) ([]Entity,
 	for _, e := range subs {
 		entities = append(entities, *e)
 	}
-	sort.Slice(entities, func(i, j int) bool { return entities[i].Name < entities[j].Name })
+	sort.SliceStable(entities, func(i, j int) bool { return ui.NaturalLess(entities[i].Name, entities[j].Name) })
 	return entities, nil
 }
 

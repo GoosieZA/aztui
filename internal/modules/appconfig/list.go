@@ -169,12 +169,12 @@ func fetchAllSettings(ctx context.Context, client *azappconfig.Client) ([]azappc
 		}
 		all = append(all, page.Settings...)
 	}
-	sort.Slice(all, func(i, j int) bool {
+	sort.SliceStable(all, func(i, j int) bool {
 		ki, kj := deref(all[i].Key), deref(all[j].Key)
 		if ki != kj {
-			return ki < kj
+			return ui.NaturalLess(ki, kj)
 		}
-		return deref(all[i].Label) < deref(all[j].Label)
+		return ui.NaturalLess(deref(all[i].Label), deref(all[j].Label))
 	})
 	return all, nil
 }
@@ -355,6 +355,10 @@ func (v *listView) handleAction(key string) (tea.Cmd, bool) {
 	case "y":
 		if s, _, ok := v.selected(); ok {
 			return ui.Yank(deref(s.Key), deref(s.Value)), true
+		}
+	case "v":
+		if s, _, ok := v.selected(); ok {
+			return ui.Push(newRevisionsView(v.res, v.client, deref(s.Key), deref(s.Label))), true
 		}
 	case "R":
 		v.loading = true
@@ -560,6 +564,7 @@ func (v *listView) KeyHints() []ui.KeyHint {
 		{Keys: "E", Desc: "bulk edit selection / bulk add when nothing selected"},
 		{Keys: "D", Desc: "diff & sync with another store"},
 		{Keys: "x", Desc: "this key across all stores"},
+		{Keys: "v", Desc: "revision history & rollback"},
 		{Keys: "y", Desc: "yank value"},
 		{Keys: "n", Desc: "new setting"},
 		{Keys: "d", Desc: "delete setting"},

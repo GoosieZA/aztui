@@ -4,6 +4,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -14,8 +15,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 
+	"github.com/GoosieZA/aztui/internal/auth"
 	"github.com/GoosieZA/aztui/internal/modules"
 	"github.com/GoosieZA/aztui/internal/ui"
+	"github.com/GoosieZA/aztui/internal/version"
 )
 
 // heartbeatInterval drives toast expiry and the activity panel animation.
@@ -42,9 +45,12 @@ type toast struct {
 	until time.Time
 }
 
+type accountMsg string
+
 type Model struct {
 	mctx     modules.Context
 	authDesc string
+	account  string
 
 	stack []tea.Model
 
@@ -70,7 +76,13 @@ func New(mctx modules.Context, authDesc string) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.stack[0].Init(), heartbeat())
+	cred := m.mctx.Cred
+	whoami := func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return accountMsg(auth.SignedInUser(ctx, cred))
+	}
+	return tea.Batch(m.stack[0].Init(), heartbeat(), whoami)
 }
 
 func (m *Model) top() tea.Model { return m.stack[len(m.stack)-1] }
@@ -134,6 +146,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.toasts) > 4 {
 			m.toasts = m.toasts[len(m.toasts)-4:]
 		}
+		return m, nil
+
+	case accountMsg:
+		m.account = string(msg)
 		return m, nil
 
 	case heartbeatMsg:
@@ -302,8 +318,14 @@ func (m *Model) header() string {
 	if m.headerHeight() == 0 {
 		return ""
 	}
+	info := version.Version
+	if m.account != "" {
+		info += " · " + m.account
+	}
+	info = runewidth.Truncate(info, 40, "…")
 	logo := lipgloss.NewStyle().Margin(0, 2, 0, 1).Render(
-		ui.LogoStyle.Render(strings.Join(logoLines, "\n")))
+		ui.LogoStyle.Render(strings.Join(logoLines, "\n")) + "\n" +
+			ui.DimStyle.Render(info))
 	panelW := m.width - lipgloss.Width(logo) - 1
 
 	const activityW = 42

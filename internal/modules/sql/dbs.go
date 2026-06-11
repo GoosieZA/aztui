@@ -184,6 +184,15 @@ func (v *dbsView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Read-only mode still gets the view — the graph is a read;
 				// applying a scale is guarded inside.
 				return v, v.openScale()
+			case "q":
+				if db := v.selected(); db != nil {
+					name := strFrom(db.Name)
+					if strings.EqualFold(name, "master") {
+						return v, ui.Warnf("Query Store isn't available on master")
+					}
+					return v, ui.Push(newQueriesView(v.res, name))
+				}
+				return v, nil
 			case "R":
 				v.loading = true
 				return v, v.Init()
@@ -210,6 +219,7 @@ func (v *dbsView) Breadcrumb() string { return v.res.Name }
 func (v *dbsView) KeyHints() []ui.KeyHint {
 	return []ui.KeyHint{
 		{Keys: "enter/s", Desc: "scale + CPU graph"},
+		{Keys: "q", Desc: "top queries (QPI)"},
 		{Keys: "R", Desc: "refresh"},
 	}
 }

@@ -115,7 +115,7 @@ func (v *crossView) Init() tea.Cmd {
 			}(i, store)
 		}
 		wg.Wait()
-		sort.Slice(rows, func(i, j int) bool { return rows[i].store.Name < rows[j].store.Name })
+		sort.SliceStable(rows, func(i, j int) bool { return ui.NaturalLess(rows[i].store.Name, rows[j].store.Name) })
 		return crossLoadedMsg{rows: rows}
 	})
 }

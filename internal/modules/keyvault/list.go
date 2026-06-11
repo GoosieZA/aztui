@@ -100,7 +100,7 @@ func (v *listView) load() tea.Cmd {
 			}
 			all = append(all, page.Value...)
 		}
-		sort.Slice(all, func(i, j int) bool { return secretName(all[i]) < secretName(all[j]) })
+		sort.SliceStable(all, func(i, j int) bool { return ui.NaturalLess(secretName(all[i]), secretName(all[j])) })
 		return secretsMsg{secrets: all}
 	}
 }

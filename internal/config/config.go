@@ -30,6 +30,9 @@ type SSHDefaults struct {
 type Config struct {
 	Recents []Recent    `yaml:"recents"`
 	SSH     SSHDefaults `yaml:"ssh,omitempty"`
+	// TileOrder pins the home-screen module tiles into a user-chosen order
+	// (module IDs). Modules not listed sort by resource count after them.
+	TileOrder []string `yaml:"tileOrder,omitempty"`
 
 	path string
 }

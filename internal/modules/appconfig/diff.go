@@ -264,7 +264,7 @@ func (v *diffView) buildRows(src, dst []azappconfig.Setting) {
 			order = append(order, k)
 		}
 	}
-	sort.Strings(order)
+	sort.SliceStable(order, func(i, j int) bool { return ui.NaturalLess(order[i], order[j]) })
 	v.rows = v.rows[:0]
 	seen := map[string]bool{}
 	for _, k := range order {

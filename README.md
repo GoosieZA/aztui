@@ -16,10 +16,12 @@ terminal and without waiting for the portal to load.
 
 - **Launcher home screen** — module tiles in a five-column grid (icon +
   live resource count, discovered tenant-wide via Azure Resource Graph),
-  sorted by how many resources you actually have; modules with zero
-  resources hide automatically (still reachable via `:`). Recently opened
-  resources and a session-changes feed sit underneath. Tiles and recents
-  are keyboard-driven and mouse-clickable.
+  sorted by how many resources you actually have; rearrange them with
+  `<`/`>` and the order sticks. Modules with zero resources hide
+  automatically (still reachable via `:`). Recently opened resources and a
+  session-changes feed sit underneath, the header shows the signed-in
+  account and version, and everything is keyboard-driven and
+  mouse-clickable. Lists sort **naturally** — `key:2` before `key:10`.
 - **Persistent header** — the logo and a full-width keys panel stay fixed at
   the top of every screen, k9s-style; the keys shown follow whatever view
   you're in. While background work runs (scaling a database, purging a
@@ -138,6 +140,7 @@ mouse clicks.
 | `E` | bulk edit selection as JSON (portal-style advanced edit) |
 | `D` | diff & sync against another store |
 | `x` | this key across every store — one row per environment; `e` edits the value in any store right there (creating it where missing) |
+| `v` | revision history — view past values, `r` rolls one back (the rollback is itself a new revision) |
 | `n` | new setting (`$EDITOR`, YAML template) |
 | `d` | delete setting |
 | `L` | lock / unlock (read-only) |
@@ -199,6 +202,7 @@ sequence, so consumers are unaffected.
 | Key | Action |
 | --- | --- |
 | `enter` / `s` | scale view: slider + CPU line graph (`1`/`2`/`3` = 1h/24h/7d range) |
+| `q` | top queries (Query Performance Insight): the database's most expensive queries from Query Store, ordered by CPU/duration/executions (`o`), over 1h/24h/7d. Connects with your Azure AD identity — needs a database user and firewall access |
 | `h` / `l` | smaller / larger size on the slider |
 | `g` / `G` | smallest / largest |
 | `t` / `T` | cycle tier (Basic/Standard/Premium or GP/Serverless/BC/Hyperscale) |
