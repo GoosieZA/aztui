@@ -130,6 +130,7 @@ type listView struct {
 	spin    spinner.Model
 	confirm ui.Confirm
 	loading bool
+	loadErr error
 
 	settings    []azappconfig.Setting
 	pendingEdit int                            // settings index for an in-flight $EDITOR session
@@ -200,7 +201,7 @@ func (v *listView) setSettings(settings []azappconfig.Setting) {
 		if s.IsReadOnly != nil && *s.IsReadOnly {
 			ro = "✓"
 		}
-		rows[i] = []string{deref(s.Key), deref(s.Label), deref(s.Value), updated, ro}
+		rows[i] = []string{deref(s.Key), deref(s.Label), displayValue(s), updated, ro}
 	}
 	v.table.SetRows(rows)
 }
@@ -222,7 +223,11 @@ func (v *listView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case settingsMsg:
 		v.loading = false
+		v.loadErr = msg.err
 		if msg.err != nil {
+			if azure.IsForbidden(msg.err) {
+				return v, ui.Warnf("no data-plane access to %s", v.res.Name)
+			}
 			return v, ui.Err(msg.err)
 		}
 		v.setSettings(msg.settings)
@@ -294,7 +299,7 @@ func (v *listView) handleAction(key string) (tea.Cmd, bool) {
 	switch key {
 	case "enter":
 		if s, _, ok := v.selected(); ok {
-			return ui.Push(newDetailView(v.res, v.client, s)), true
+			return ui.Push(newDetailView(v.mctx, v.res, v.client, s)), true
 		}
 	case "e":
 		if s, idx, ok := v.selected(); ok {
@@ -309,7 +314,11 @@ func (v *listView) handleAction(key string) (tea.Cmd, bool) {
 	case "E":
 		sel := v.table.SelectedRows()
 		if len(sel) == 0 {
-			return ui.Warnf("select settings with space first (ctrl+a: all visible)"), true
+			// Bulk add: an empty selection means everything in the saved
+			// array gets created. Duplicate the skeleton per new setting.
+			v.bulkOrig = map[string]azappconfig.Setting{}
+			skeleton := []byte("[\n  {\n    \"key\": \"\",\n    \"label\": \"\",\n    \"value\": \"\",\n    \"content_type\": \"\"\n  }\n]\n")
+			return ui.OpenEditor("bulk", skeleton, "json"), true
 		}
 		v.bulkOrig = make(map[string]azappconfig.Setting, len(sel))
 		entries := make([]bulkEntry, 0, len(sel))
@@ -383,6 +392,14 @@ func (v *listView) handleEditor(msg ui.EditorResult) tea.Cmd {
 		if err := json.Unmarshal(msg.Content, &entries); err != nil {
 			return ui.Errorf("invalid json: %v", err)
 		}
+		// Drop untouched skeleton rows from a bulk add.
+		kept := entries[:0]
+		for _, e := range entries {
+			if e.Key != "" || e.Value != "" {
+				kept = append(kept, e)
+			}
+		}
+		entries = kept
 		plan, err := buildPlan(v.bulkOrig, entries)
 		if err != nil {
 			return ui.Err(err)
@@ -512,6 +529,18 @@ func (v *listView) View() string {
 	if v.loading {
 		return title + "\n\n " + v.spin.View() + ui.DimStyle.Render(" loading settings...")
 	}
+	if v.loadErr != nil {
+		if azure.IsForbidden(v.loadErr) {
+			return title + "\n\n" +
+				ui.WarnStyle.Render(" 403 — you can see this store, but not its data.") + "\n\n" +
+				ui.DimStyle.Render(" Reading key-values needs a data-plane role on the store itself:\n"+
+					" ask for \"App Configuration Data Reader\" (or Data Owner to edit).\n"+
+					" ARM access — seeing the resource in lists — is granted separately.\n\n"+
+					" R retries once the role is assigned.")
+		}
+		return title + "\n\n" + ui.ErrStyle.Render(" loading failed: "+v.loadErr.Error()) + "\n\n" +
+			ui.DimStyle.Render(" press R to retry")
+	}
 	if v.confirm.Active {
 		return v.confirm.Overlay(v.width, v.height)
 	}
@@ -528,7 +557,7 @@ func (v *listView) KeyHints() []ui.KeyHint {
 		{Keys: "e", Desc: "edit value in $EDITOR"},
 		{Keys: "space", Desc: "select / deselect"},
 		{Keys: "ctrl+a", Desc: "select all visible"},
-		{Keys: "E", Desc: "bulk edit selection as JSON"},
+		{Keys: "E", Desc: "bulk edit selection / bulk add when nothing selected"},
 		{Keys: "D", Desc: "diff & sync with another store"},
 		{Keys: "x", Desc: "this key across all stores"},
 		{Keys: "y", Desc: "yank value"},

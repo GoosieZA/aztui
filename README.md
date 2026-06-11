@@ -151,8 +151,17 @@ exist on the receiving side — after an explicit confirmation.
 
 Bulk edit opens the selected settings as a JSON array in your `$EDITOR` —
 change values to update, add entries to create, remove entries to delete.
-A confirmation summarises the plan before anything is written, and every
-update/delete is ETag-guarded against concurrent changes.
+With **nothing selected, `E` is bulk add**: an empty array skeleton where
+every entry you write gets created. A confirmation summarises the plan
+before anything is written, and every update/delete is ETag-guarded
+against concurrent changes.
+
+**Key Vault references** render as `🔑 → vault/secret` instead of raw
+JSON; opening one resolves the secret from the vault and shows either its
+value or exactly which vault you lack access to. A 403 listing the store
+itself gets a clear explanation too: seeing a store in Azure (ARM access)
+and reading its data are separate grants — you need
+**App Configuration Data Reader** for the latter.
 
 ### Service Bus
 

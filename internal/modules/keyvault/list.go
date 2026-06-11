@@ -61,6 +61,7 @@ type listView struct {
 	spin    spinner.Model
 	confirm ui.Confirm
 	loading bool
+	loadErr error
 
 	secrets []*azsecrets.SecretProperties
 	editing string // secret name with an in-flight $EDITOR session
@@ -164,7 +165,11 @@ func (v *listView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case secretsMsg:
 		v.loading = false
+		v.loadErr = msg.err
 		if msg.err != nil {
+			if azure.IsForbidden(msg.err) {
+				return v, ui.Warnf("no data-plane access to %s", v.res.Name)
+			}
 			return v, ui.Err(msg.err)
 		}
 		v.setSecrets(msg.secrets)
@@ -331,6 +336,14 @@ func (v *listView) View() string {
 		ui.DimStyle.Render(fmt.Sprintf("  %d secrets", v.table.Count()))
 	if v.loading {
 		return title + "\n\n " + v.spin.View() + ui.DimStyle.Render(" working...")
+	}
+	if v.loadErr != nil && azure.IsForbidden(v.loadErr) {
+		return title + "\n\n" +
+			ui.WarnStyle.Render(" 403 — you can see this vault, but not its secrets.") + "\n\n" +
+			ui.DimStyle.Render(" Reading secrets needs a data-plane role on the vault itself:\n"+
+				" ask for \"Key Vault Secrets User\" (RBAC vaults) or a secrets access\n"+
+				" policy. ARM access — seeing the vault in lists — is granted separately.\n\n"+
+				" R retries once access is granted.")
 	}
 	if v.confirm.Active {
 		return v.confirm.Overlay(v.width, v.height)
