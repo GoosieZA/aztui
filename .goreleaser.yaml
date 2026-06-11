@@ -1,0 +1,54 @@
+version: 2
+project_name: aztui
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/aztui
+    binary: aztui
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/GoosieZA/aztui/internal/version.Version=v{{ .Version }}
+      - -X github.com/GoosieZA/aztui/internal/version.Commit={{ .ShortCommit }}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - repository:
+      owner: GoosieZA
+      name: homebrew-tap
+    directory: Formula
+    homepage: https://github.com/GoosieZA/aztui
+    description: k9s-style terminal UI for Azure
+    license: MIT
+    test: |
+      system "#{bin}/aztui", "--version"

@@ -1,0 +1,30 @@
+name: release
+
+# Releases are normally cut locally with `make release` (goreleaser needs a
+# token that can push the brew formula to the homebrew-tap repo, which the
+# default Actions token cannot). This workflow is a manual fallback: add a
+# classic PAT with repo scope as the HOMEBREW_TAP_TOKEN secret, then run it
+# from the Actions tab on a tagged commit.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
