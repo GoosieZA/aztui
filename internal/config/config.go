@@ -33,6 +33,9 @@ type Config struct {
 	// TileOrder pins the home-screen module tiles into a user-chosen order
 	// (module IDs). Modules not listed sort by resource count after them.
 	TileOrder []string `yaml:"tileOrder,omitempty"`
+	// DisableUpdateCheck turns off the once-per-launch lookup of the latest
+	// GitHub release.
+	DisableUpdateCheck bool `yaml:"disableUpdateCheck,omitempty"`
 
 	path string
 }

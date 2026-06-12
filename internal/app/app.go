@@ -47,10 +47,13 @@ type toast struct {
 
 type accountMsg string
 
+type updateAvailableMsg string
+
 type Model struct {
-	mctx     modules.Context
-	authDesc string
-	account  string
+	mctx        modules.Context
+	authDesc    string
+	account     string
+	updateAvail string // newer released version, "" when current
 
 	stack []tea.Model
 
@@ -82,7 +85,19 @@ func (m *Model) Init() tea.Cmd {
 		defer cancel()
 		return accountMsg(auth.SignedInUser(ctx, cred))
 	}
-	return tea.Batch(m.stack[0].Init(), heartbeat(), whoami)
+	cmds := []tea.Cmd{m.stack[0].Init(), heartbeat(), whoami}
+	if version.IsReleaseBuild() && !m.mctx.Config.DisableUpdateCheck {
+		cmds = append(cmds, func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			latest, err := version.LatestRelease(ctx)
+			if err == nil && version.IsNewer(latest, version.Version) {
+				return updateAvailableMsg(latest)
+			}
+			return nil
+		})
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) top() tea.Model { return m.stack[len(m.stack)-1] }
@@ -151,6 +166,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case accountMsg:
 		m.account = string(msg)
 		return m, nil
+
+	case updateAvailableMsg:
+		m.updateAvail = string(msg)
+		return m, ui.Warnf("%s is available (you have %s) — brew upgrade aztui", string(msg), version.Version)
 
 	case heartbeatMsg:
 		now := time.Time(msg)
@@ -323,9 +342,13 @@ func (m *Model) header() string {
 		info += " · " + m.account
 	}
 	info = runewidth.Truncate(info, 40, "…")
+	infoLine := ui.DimStyle.Render(info)
+	if m.updateAvail != "" {
+		infoLine = ui.DimStyle.Render(runewidth.Truncate(info, 24, "…")) +
+			ui.WarnStyle.Render(" ⬆ "+m.updateAvail)
+	}
 	logo := lipgloss.NewStyle().Margin(0, 2, 0, 1).Render(
-		ui.LogoStyle.Render(strings.Join(logoLines, "\n")) + "\n" +
-			ui.DimStyle.Render(info))
+		ui.LogoStyle.Render(strings.Join(logoLines, "\n")) + "\n" + infoLine)
 	panelW := m.width - lipgloss.Width(logo) - 1
 
 	const activityW = 42

@@ -98,6 +98,11 @@ run `az login`, it just works), falling back to an **interactive browser**
 sign-in whose tokens are cached persistently. No connection strings, no
 config files.
 
+On startup aztui makes one anonymous request to GitHub to see whether a
+newer release exists, and shows a toast + header hint if so. Set
+`disableUpdateCheck: true` in the config file to turn it off; dev builds
+never check.
+
 The identity needs the usual data-plane roles on the resources you open
 (e.g. *App Configuration Data Owner*, *Azure Service Bus Data Owner*) and
 read access for Azure Resource Graph discovery.
